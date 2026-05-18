@@ -57,4 +57,17 @@ func TestMigrationsApply(t *testing.T) {
 	if err := goose.Up(conn, "../../db/migrations"); err != nil {
 		t.Fatalf("goose up: %v", err)
 	}
+
+	var tableCount int
+	if err := conn.QueryRow(`
+		SELECT count(*)
+		FROM information_schema.tables
+		WHERE table_schema = 'public'
+			AND table_name IN ('accounts', 'account_identities', 'account_sessions')
+	`).Scan(&tableCount); err != nil {
+		t.Fatalf("count account tables: %v", err)
+	}
+	if tableCount != 3 {
+		t.Fatalf("account table count = %d, want 3", tableCount)
+	}
 }
