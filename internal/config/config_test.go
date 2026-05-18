@@ -42,3 +42,49 @@ func TestLoadRejectsInvalidBool(t *testing.T) {
 		t.Fatal("Load() error = nil, want invalid bool error")
 	}
 }
+
+func TestLoadAppliesAuthDefaults(t *testing.T) {
+	t.Setenv("SESSION_COOKIE_NAME", "")
+	t.Setenv("SESSION_TTL_HOURS", "")
+	t.Setenv("BCRYPT_COST", "")
+	t.Setenv("GOOGLE_USERINFO_URL", "")
+	t.Setenv("KAKAO_USERINFO_URL", "")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+
+	if cfg.SessionCookieName != "hunch_session" {
+		t.Fatalf("SessionCookieName = %q, want hunch_session", cfg.SessionCookieName)
+	}
+	if cfg.SessionTTLHours != 24*30 {
+		t.Fatalf("SessionTTLHours = %d, want %d", cfg.SessionTTLHours, 24*30)
+	}
+	if cfg.BcryptCost != 12 {
+		t.Fatalf("BcryptCost = %d, want 12", cfg.BcryptCost)
+	}
+	if cfg.GoogleUserInfoURL != "https://openidconnect.googleapis.com/v1/userinfo" {
+		t.Fatalf("GoogleUserInfoURL = %q", cfg.GoogleUserInfoURL)
+	}
+	if cfg.KakaoUserInfoURL != "https://kapi.kakao.com/v2/user/me" {
+		t.Fatalf("KakaoUserInfoURL = %q", cfg.KakaoUserInfoURL)
+	}
+}
+
+func TestLoadRejectsInvalidAuthNumbers(t *testing.T) {
+	t.Setenv("SESSION_TTL_HOURS", "0")
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("Load() error = nil, want invalid ttl error")
+	}
+
+	t.Setenv("SESSION_TTL_HOURS", "24")
+	t.Setenv("BCRYPT_COST", "3")
+
+	_, err = Load()
+	if err == nil {
+		t.Fatal("Load() error = nil, want invalid bcrypt cost error")
+	}
+}
