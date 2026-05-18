@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
@@ -44,6 +45,7 @@ func (s *Service) SignupEmail(ctx context.Context, input SignupEmailInput) (Auth
 	if err != nil {
 		return AuthResult{}, err
 	}
+	email := strings.TrimSpace(input.Email)
 	passwordHash, err := HashPassword(input.Password, s.bcryptCost)
 	if err != nil {
 		return AuthResult{}, err
@@ -52,7 +54,7 @@ func (s *Service) SignupEmail(ctx context.Context, input SignupEmailInput) (Auth
 	var result AuthResult
 	err = s.repository.WithTx(ctx, func(repo Repository) error {
 		account, err := repo.CreateAccount(ctx, CreateAccountParams{
-			Email:           input.Email,
+			Email:           email,
 			NormalizedEmail: normalizedEmail,
 			DisplayName:     input.DisplayName,
 		})
@@ -63,7 +65,7 @@ func (s *Service) SignupEmail(ctx context.Context, input SignupEmailInput) (Auth
 			AccountID:       account.ID,
 			Provider:        ProviderEmail,
 			ProviderSubject: normalizedEmail,
-			Email:           input.Email,
+			Email:           email,
 			NormalizedEmail: normalizedEmail,
 			EmailVerified:   true,
 			PasswordHash:    passwordHash,
@@ -123,6 +125,9 @@ func (s *Service) signinOAuth(ctx context.Context, input SigninInput) (AuthResul
 	if err != nil {
 		return AuthResult{}, err
 	}
+	if profile.Provider != input.Method {
+		return AuthResult{}, fmt.Errorf("%w: provider mismatch", ErrInvalidCredentials)
+	}
 
 	var result AuthResult
 	err = s.repository.WithTx(ctx, func(repo Repository) error {
@@ -147,8 +152,8 @@ func (s *Service) signinOAuth(ctx context.Context, input SigninInput) (AuthResul
 			AccountID:       account.ID,
 			Provider:        profile.Provider,
 			ProviderSubject: profile.Subject,
-			Email:           profile.Email,
-			NormalizedEmail: normalizedVerifiedEmail(profile),
+			Email:           verifiedEmail(profile),
+			NormalizedEmail: verifiedNormalizedEmail(profile),
 			EmailVerified:   profile.EmailVerified,
 		})
 		if err != nil {
@@ -168,7 +173,8 @@ func (s *Service) signinOAuth(ctx context.Context, input SigninInput) (AuthResul
 }
 
 func (s *Service) accountForNewOAuthIdentity(ctx context.Context, repo Repository, profile ExternalProfile) (Account, error) {
-	normalizedEmail := normalizedVerifiedEmail(profile)
+	email := verifiedEmail(profile)
+	normalizedEmail := verifiedNormalizedEmail(profile)
 	if normalizedEmail != "" {
 		account, err := repo.FindActiveAccountByNormalizedEmail(ctx, normalizedEmail)
 		if err == nil {
@@ -179,14 +185,21 @@ func (s *Service) accountForNewOAuthIdentity(ctx context.Context, repo Repositor
 		}
 	}
 	return repo.CreateAccount(ctx, CreateAccountParams{
-		Email:           profile.Email,
+		Email:           email,
 		NormalizedEmail: normalizedEmail,
 		DisplayName:     profile.DisplayName,
 		AvatarURL:       profile.AvatarURL,
 	})
 }
 
-func normalizedVerifiedEmail(profile ExternalProfile) string {
+func verifiedEmail(profile ExternalProfile) string {
+	if verifiedNormalizedEmail(profile) == "" {
+		return ""
+	}
+	return strings.TrimSpace(profile.Email)
+}
+
+func verifiedNormalizedEmail(profile ExternalProfile) string {
 	if !profile.EmailVerified || profile.Email == "" {
 		return ""
 	}
