@@ -90,6 +90,53 @@ func TestServiceSigninOAuthCreatesAccountWhenIdentityIsNew(t *testing.T) {
 	}
 }
 
+func TestServiceSigninOAuthIgnoresUnverifiedEmailForStorage(t *testing.T) {
+	repo := newFakeRepository()
+	service := NewService(Config{
+		Repository: repo,
+		Verifier: fakeVerifier{profile: ExternalProfile{
+			Provider: ProviderKakao, Subject: "kakao-sub", Email: "kakao@example.com", EmailVerified: false,
+		}},
+		BcryptCost: 4,
+		SessionTTL: time.Hour,
+		Now:        func() time.Time { return time.Unix(1000, 0).UTC() },
+	})
+
+	result, err := service.Signin(context.Background(), SigninInput{
+		Method: ProviderKakao, AccessToken: "provider-token",
+	})
+	if err != nil {
+		t.Fatalf("Signin() error = %v", err)
+	}
+	if result.Account.Email != "" || result.Account.NormalizedEmail != "" {
+		t.Fatalf("account email = %q normalized=%q, want empty", result.Account.Email, result.Account.NormalizedEmail)
+	}
+	identity := repo.identities[identityKey(ProviderKakao, "kakao-sub")]
+	if identity.Email != "" || identity.NormalizedEmail != "" {
+		t.Fatalf("identity email = %q normalized=%q, want empty", identity.Email, identity.NormalizedEmail)
+	}
+}
+
+func TestServiceSigninOAuthRejectsProviderMismatch(t *testing.T) {
+	repo := newFakeRepository()
+	service := NewService(Config{
+		Repository: repo,
+		Verifier: fakeVerifier{profile: ExternalProfile{
+			Provider: ProviderKakao, Subject: "kakao-sub",
+		}},
+		BcryptCost: 4,
+		SessionTTL: time.Hour,
+		Now:        func() time.Time { return time.Unix(1000, 0).UTC() },
+	})
+
+	_, err := service.Signin(context.Background(), SigninInput{
+		Method: ProviderGoogle, AccessToken: "provider-token",
+	})
+	if !errors.Is(err, ErrInvalidCredentials) {
+		t.Fatalf("Signin() error = %v, want ErrInvalidCredentials", err)
+	}
+}
+
 type fakeVerifier struct {
 	profile ExternalProfile
 	err     error
@@ -129,6 +176,9 @@ func (r *fakeRepository) WithTx(ctx context.Context, fn func(Repository) error) 
 }
 
 func (r *fakeRepository) CreateAccount(_ context.Context, params CreateAccountParams) (Account, error) {
+	if (params.Email == "") != (params.NormalizedEmail == "") {
+		return Account{}, fmt.Errorf("email and normalized email must both be present or empty")
+	}
 	if params.NormalizedEmail != "" {
 		if _, ok := r.accounts[params.NormalizedEmail]; ok {
 			return Account{}, ErrEmailAlreadyExists
@@ -179,6 +229,12 @@ func (r *fakeRepository) SoftDeleteAccountIdentities(_ context.Context, accountI
 }
 
 func (r *fakeRepository) CreateIdentity(_ context.Context, params CreateIdentityParams) (Identity, error) {
+	if (params.Email == "") != (params.NormalizedEmail == "") {
+		return Identity{}, fmt.Errorf("email and normalized email must both be present or empty")
+	}
+	if params.Provider == ProviderEmail && (params.Email == "" || params.NormalizedEmail == "" || params.PasswordHash == "") {
+		return Identity{}, fmt.Errorf("email identity requires email and password hash")
+	}
 	key := identityKey(params.Provider, params.ProviderSubject)
 	if _, ok := r.identities[key]; ok {
 		return Identity{}, ErrInvalidCredentials
