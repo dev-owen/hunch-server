@@ -57,7 +57,7 @@ INSERT INTO account_identities (
     password_hash
 )
 VALUES ($1, $2, $3, $4, $5, $6, $7)
-RETURNING id, account_id, provider, provider_subject, email, normalized_email, email_verified, password_hash, created_at, updated_at
+RETURNING id, account_id, provider, provider_subject, email, normalized_email, email_verified, password_hash, created_at, updated_at, deleted_at
 `
 
 type CreateAccountIdentityParams struct {
@@ -92,6 +92,7 @@ func (q *Queries) CreateAccountIdentity(ctx context.Context, arg CreateAccountId
 		&i.PasswordHash,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DeletedAt,
 	)
 	return i, err
 }
@@ -216,6 +217,7 @@ FROM account_identities ai
 JOIN accounts a ON a.id = ai.account_id
 WHERE ai.provider = 'email'
   AND ai.normalized_email = $1
+  AND ai.deleted_at IS NULL
   AND a.deleted_at IS NULL
   AND a.status = 'active'
 `
@@ -294,6 +296,7 @@ FROM account_identities ai
 JOIN accounts a ON a.id = ai.account_id
 WHERE ai.provider = $1
   AND ai.provider_subject = $2
+  AND ai.deleted_at IS NULL
   AND a.deleted_at IS NULL
   AND a.status = 'active'
 `
@@ -387,5 +390,18 @@ WHERE id = $1
 
 func (q *Queries) SoftDeleteAccount(ctx context.Context, id pgtype.UUID) error {
 	_, err := q.db.Exec(ctx, softDeleteAccount, id)
+	return err
+}
+
+const softDeleteAccountIdentities = `-- name: SoftDeleteAccountIdentities :exec
+UPDATE account_identities
+SET deleted_at = now(),
+    updated_at = now()
+WHERE account_id = $1
+  AND deleted_at IS NULL
+`
+
+func (q *Queries) SoftDeleteAccountIdentities(ctx context.Context, accountID pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, softDeleteAccountIdentities, accountID)
 	return err
 }
