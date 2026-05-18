@@ -10,6 +10,10 @@ CREATE TABLE accounts (
     updated_at timestamptz NOT NULL DEFAULT now(),
     deleted_at timestamptz,
     CONSTRAINT accounts_status_check CHECK (status IN ('active', 'deleted')),
+    CONSTRAINT accounts_deleted_at_status_check CHECK (
+        (status = 'active' AND deleted_at IS NULL)
+        OR (status = 'deleted' AND deleted_at IS NOT NULL)
+    ),
     CONSTRAINT accounts_email_pair_check CHECK (
         (email IS NULL AND normalized_email IS NULL)
         OR (email IS NOT NULL AND normalized_email IS NOT NULL)
@@ -31,19 +35,25 @@ CREATE TABLE account_identities (
     password_hash text,
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now(),
+    deleted_at timestamptz,
     CONSTRAINT account_identities_provider_check CHECK (provider IN ('email', 'google', 'kakao')),
     CONSTRAINT account_identities_email_password_check CHECK (
         provider <> 'email'
-        OR (normalized_email IS NOT NULL AND password_hash IS NOT NULL)
+        OR (email IS NOT NULL AND normalized_email IS NOT NULL AND password_hash IS NOT NULL)
+    ),
+    CONSTRAINT account_identities_email_pair_check CHECK (
+        (email IS NULL AND normalized_email IS NULL)
+        OR (email IS NOT NULL AND normalized_email IS NOT NULL)
     )
 );
 
 CREATE UNIQUE INDEX account_identities_provider_subject_idx
-    ON account_identities (provider, provider_subject);
+    ON account_identities (provider, provider_subject)
+    WHERE deleted_at IS NULL;
 
 CREATE UNIQUE INDEX account_identities_email_idx
     ON account_identities (normalized_email)
-    WHERE provider = 'email' AND normalized_email IS NOT NULL;
+    WHERE provider = 'email' AND normalized_email IS NOT NULL AND deleted_at IS NULL;
 
 CREATE TABLE account_sessions (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -57,6 +67,10 @@ CREATE TABLE account_sessions (
 
 CREATE INDEX account_sessions_active_idx
     ON account_sessions (token_hash, expires_at)
+    WHERE revoked_at IS NULL;
+
+CREATE INDEX account_sessions_account_active_idx
+    ON account_sessions (account_id)
     WHERE revoked_at IS NULL;
 
 -- +goose Down

@@ -32,6 +32,7 @@ type AccountIdentity struct {
 	PasswordHash    pgtype.Text        `json:"password_hash"`
 	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt       pgtype.Timestamptz `json:"deleted_at"`
 }
 
 type AccountSession struct {

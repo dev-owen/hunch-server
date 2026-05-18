@@ -26,6 +26,7 @@ type Querier interface {
 	RevokeAccountSession(ctx context.Context, tokenHash string) error
 	RevokeAllAccountSessions(ctx context.Context, accountID pgtype.UUID) error
 	SoftDeleteAccount(ctx context.Context, id pgtype.UUID) error
+	SoftDeleteAccountIdentities(ctx context.Context, accountID pgtype.UUID) error
 }
 
 var _ Querier = (*Queries)(nil)
