@@ -30,9 +30,10 @@ func (r *PostgresRepository) WithTx(ctx context.Context, fn func(Repository) err
 	if err != nil {
 		return err
 	}
-	txRepo := &postgresTxRepository{tx: tx, queries: dbgen.New(tx)}
+	defer tx.Rollback(ctx)
+
+	txRepo := &postgresTxRepository{queries: dbgen.New(tx)}
 	if err := fn(txRepo); err != nil {
-		_ = tx.Rollback(ctx)
 		return err
 	}
 	return tx.Commit(ctx)
@@ -83,7 +84,6 @@ func (r *PostgresRepository) RevokeAllAccountSessions(ctx context.Context, accou
 }
 
 type postgresTxRepository struct {
-	tx      pgx.Tx
 	queries *dbgen.Queries
 }
 
@@ -173,7 +173,10 @@ func createIdentity(ctx context.Context, queries *dbgen.Queries, params CreateId
 		PasswordHash:    textParam(params.PasswordHash),
 	})
 	if isUniqueViolation(err) {
-		return Identity{}, ErrEmailAlreadyExists
+		if params.Provider == ProviderEmail {
+			return Identity{}, ErrEmailAlreadyExists
+		}
+		return Identity{}, ErrInvalidCredentials
 	}
 	if err != nil {
 		return Identity{}, err
