@@ -12,6 +12,7 @@ import (
 
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 
+	"github.com/wonjong/hunch-server/internal/account"
 	"github.com/wonjong/hunch-server/internal/ai"
 	"github.com/wonjong/hunch-server/internal/config"
 	"github.com/wonjong/hunch-server/internal/db"
@@ -73,8 +74,30 @@ func run() error {
 	}
 	_ = worker.NewQueue(pool)
 
+	accountRepository := account.NewPostgresRepository(pool)
+	accountVerifier := account.HTTPProviderVerifier{
+		Client:            &http.Client{Timeout: 5 * time.Second},
+		GoogleUserInfoURL: cfg.GoogleUserInfoURL,
+		KakaoUserInfoURL:  cfg.KakaoUserInfoURL,
+	}
+	accountService := account.NewService(account.Config{
+		Repository: accountRepository,
+		Verifier:   accountVerifier,
+		BcryptCost: cfg.BcryptCost,
+		SessionTTL: time.Duration(cfg.SessionTTLHours) * time.Hour,
+	})
+	accountHandlers := account.NewHandlers(accountService, account.HandlerConfig{
+		CookieName: cfg.SessionCookieName,
+		CookieTTL:  time.Duration(cfg.SessionTTLHours) * time.Hour,
+		Secure:     cfg.AppEnv != "local",
+	})
+
 	router := httpserver.NewRouter(httpserver.Dependencies{
 		ReadinessCheck: db.PingCheck(pool),
+		AccountSignup:  http.HandlerFunc(accountHandlers.Signup),
+		AccountSignin:  http.HandlerFunc(accountHandlers.Signin),
+		AccountSignout: http.HandlerFunc(accountHandlers.Signout),
+		AccountDelete:  http.HandlerFunc(accountHandlers.Delete),
 	})
 
 	server := &http.Server{

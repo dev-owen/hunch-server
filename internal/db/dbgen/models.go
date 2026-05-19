@@ -9,6 +9,42 @@ import (
 	"github.com/pgvector/pgvector-go"
 )
 
+type Account struct {
+	ID              pgtype.UUID        `json:"id"`
+	Email           pgtype.Text        `json:"email"`
+	NormalizedEmail pgtype.Text        `json:"normalized_email"`
+	DisplayName     string             `json:"display_name"`
+	AvatarUrl       pgtype.Text        `json:"avatar_url"`
+	Status          string             `json:"status"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt       pgtype.Timestamptz `json:"deleted_at"`
+}
+
+type AccountIdentity struct {
+	ID              pgtype.UUID        `json:"id"`
+	AccountID       pgtype.UUID        `json:"account_id"`
+	Provider        string             `json:"provider"`
+	ProviderSubject string             `json:"provider_subject"`
+	Email           pgtype.Text        `json:"email"`
+	NormalizedEmail pgtype.Text        `json:"normalized_email"`
+	EmailVerified   bool               `json:"email_verified"`
+	PasswordHash    pgtype.Text        `json:"password_hash"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt       pgtype.Timestamptz `json:"deleted_at"`
+}
+
+type AccountSession struct {
+	ID        pgtype.UUID        `json:"id"`
+	AccountID pgtype.UUID        `json:"account_id"`
+	TokenHash string             `json:"token_hash"`
+	UserAgent string             `json:"user_agent"`
+	ExpiresAt pgtype.Timestamptz `json:"expires_at"`
+	RevokedAt pgtype.Timestamptz `json:"revoked_at"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
 type Document struct {
 	ID        pgtype.UUID        `json:"id"`
 	Title     string             `json:"title"`
