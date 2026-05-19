@@ -231,3 +231,33 @@ func (s *Service) createSession(ctx context.Context, repo Repository, accountID 
 	session.ExpiresAt = expiresAt
 	return session, nil
 }
+
+func (s *Service) Authenticate(ctx context.Context, rawToken string) (Account, error) {
+	if rawToken == "" {
+		return Account{}, ErrUnauthenticated
+	}
+	account, err := s.repository.FindAccountBySessionTokenHash(ctx, HashSessionToken(rawToken))
+	if err != nil {
+		return Account{}, ErrUnauthenticated
+	}
+	return account, nil
+}
+
+func (s *Service) Signout(ctx context.Context, rawToken string) error {
+	if rawToken == "" {
+		return ErrUnauthenticated
+	}
+	return s.repository.RevokeSession(ctx, HashSessionToken(rawToken))
+}
+
+func (s *Service) DeleteAccount(ctx context.Context, accountID pgtype.UUID) error {
+	return s.repository.WithTx(ctx, func(repo Repository) error {
+		if err := repo.SoftDeleteAccount(ctx, accountID); err != nil {
+			return err
+		}
+		if err := repo.SoftDeleteAccountIdentities(ctx, accountID); err != nil {
+			return err
+		}
+		return repo.RevokeAllAccountSessions(ctx, accountID)
+	})
+}
