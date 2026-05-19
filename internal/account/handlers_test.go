@@ -51,6 +51,24 @@ func TestHandlersSigninRejectsBadCredentials(t *testing.T) {
 	}
 }
 
+func TestHandlersSigninRejectsTrailingJSON(t *testing.T) {
+	service := newTestService()
+	handlers := NewHandlers(service, HandlerConfig{CookieName: "hunch_session", CookieTTL: time.Hour})
+
+	req := httptest.NewRequest(http.MethodPost, "/signin", strings.NewReader(`{
+		"method":"email",
+		"email":"user@example.com",
+		"password":"password123"
+	} {}`))
+	rec := httptest.NewRecorder()
+
+	handlers.Signin(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
 func TestHandlersSignoutClearsCookie(t *testing.T) {
 	service := newTestService()
 	handlers := NewHandlers(service, HandlerConfig{CookieName: "hunch_session", CookieTTL: time.Hour})
