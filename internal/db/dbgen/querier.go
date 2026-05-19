@@ -13,9 +13,20 @@ import (
 type Querier interface {
 	ClaimJob(ctx context.Context, lockedBy pgtype.Text) (Job, error)
 	CompleteJob(ctx context.Context, id int64) error
+	CreateAccount(ctx context.Context, arg CreateAccountParams) (Account, error)
+	CreateAccountIdentity(ctx context.Context, arg CreateAccountIdentityParams) (AccountIdentity, error)
+	CreateAccountSession(ctx context.Context, arg CreateAccountSessionParams) (AccountSession, error)
 	EnqueueJob(ctx context.Context, arg EnqueueJobParams) (Job, error)
 	FailJob(ctx context.Context, arg FailJobParams) error
+	FindAccountBySessionTokenHash(ctx context.Context, tokenHash string) (Account, error)
+	FindActiveAccountByNormalizedEmail(ctx context.Context, normalizedEmail pgtype.Text) (Account, error)
+	FindEmailIdentityWithAccount(ctx context.Context, normalizedEmail pgtype.Text) (FindEmailIdentityWithAccountRow, error)
+	FindIdentityWithAccount(ctx context.Context, arg FindIdentityWithAccountParams) (FindIdentityWithAccountRow, error)
 	Ping(ctx context.Context) (int32, error)
+	RevokeAccountSession(ctx context.Context, tokenHash string) error
+	RevokeAllAccountSessions(ctx context.Context, accountID pgtype.UUID) error
+	SoftDeleteAccount(ctx context.Context, id pgtype.UUID) error
+	SoftDeleteAccountIdentities(ctx context.Context, accountID pgtype.UUID) error
 }
 
 var _ Querier = (*Queries)(nil)
