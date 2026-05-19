@@ -15,6 +15,11 @@ type ReadinessCheck func(*http.Request) error
 
 type Dependencies struct {
 	ReadinessCheck ReadinessCheck
+
+	AccountSignup  http.Handler
+	AccountSignin  http.Handler
+	AccountSignout http.Handler
+	AccountDelete  http.Handler
 }
 
 func NewRouter(deps Dependencies) http.Handler {
@@ -41,6 +46,19 @@ func NewRouter(deps Dependencies) http.Handler {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ready\n"))
 	})
+
+	if deps.AccountSignup != nil {
+		router.Method(http.MethodPost, "/signup", deps.AccountSignup)
+	}
+	if deps.AccountSignin != nil {
+		router.Method(http.MethodPost, "/signin", deps.AccountSignin)
+	}
+	if deps.AccountSignout != nil {
+		router.Method(http.MethodPost, "/signout", deps.AccountSignout)
+	}
+	if deps.AccountDelete != nil {
+		router.Method(http.MethodDelete, "/delete", deps.AccountDelete)
+	}
 
 	router.Handle("/metrics", promhttp.Handler())
 

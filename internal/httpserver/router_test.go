@@ -38,3 +38,25 @@ func TestReadyzUsesReadinessCheck(t *testing.T) {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusServiceUnavailable)
 	}
 }
+
+func TestRouterMountsAccountRoutesWhenHandlersProvided(t *testing.T) {
+	called := false
+	router := NewRouter(Dependencies{
+		AccountSignup: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			called = true
+			w.WriteHeader(http.StatusCreated)
+		}),
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/signup", nil)
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusCreated)
+	}
+	if !called {
+		t.Fatal("account signup handler was not called")
+	}
+}
