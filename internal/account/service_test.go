@@ -206,6 +206,9 @@ func TestServiceDeleteAccountSoftDeletesAndRevokesSessions(t *testing.T) {
 	if err := service.DeleteAccount(context.Background(), result.Account.ID); err != nil {
 		t.Fatalf("DeleteAccount() error = %v", err)
 	}
+	if _, err := repo.FindActiveAccountByNormalizedEmail(context.Background(), "user@example.com"); !errors.Is(err, ErrInvalidCredentials) {
+		t.Fatalf("FindActiveAccountByNormalizedEmail() error = %v, want ErrInvalidCredentials", err)
+	}
 	_, err = service.Authenticate(context.Background(), result.Session.RawToken)
 	if !errors.Is(err, ErrUnauthenticated) {
 		t.Fatalf("Authenticate() error = %v, want ErrUnauthenticated", err)
@@ -288,7 +291,14 @@ func (r *fakeRepository) FindActiveAccountByNormalizedEmail(_ context.Context, n
 }
 
 func (r *fakeRepository) SoftDeleteAccount(_ context.Context, accountID pgtype.UUID) error {
+	account, ok := r.accountsByID[uuidKey(accountID)]
+	if !ok {
+		return nil
+	}
 	delete(r.accountsByID, uuidKey(accountID))
+	if account.NormalizedEmail != "" {
+		delete(r.accounts, account.NormalizedEmail)
+	}
 	return nil
 }
 
