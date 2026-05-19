@@ -238,7 +238,10 @@ func (s *Service) Authenticate(ctx context.Context, rawToken string) (Account, e
 	}
 	account, err := s.repository.FindAccountBySessionTokenHash(ctx, HashSessionToken(rawToken))
 	if err != nil {
-		return Account{}, ErrUnauthenticated
+		if errors.Is(err, ErrInvalidCredentials) {
+			return Account{}, ErrUnauthenticated
+		}
+		return Account{}, err
 	}
 	return account, nil
 }
