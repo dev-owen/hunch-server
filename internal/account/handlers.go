@@ -3,9 +3,12 @@ package account
 import (
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"time"
 )
+
+const maxRequestBodyBytes = 1 << 20
 
 type HandlerConfig struct {
 	CookieName string
@@ -145,7 +148,12 @@ func (h *Handlers) clearSessionCookie(w http.ResponseWriter) {
 
 func decodeJSON(w http.ResponseWriter, r *http.Request, target any) bool {
 	defer r.Body.Close()
-	if err := json.NewDecoder(r.Body).Decode(target); err != nil {
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxRequestBodyBytes))
+	if err := decoder.Decode(target); err != nil {
+		writeError(w, ErrInvalidInput)
+		return false
+	}
+	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
 		writeError(w, ErrInvalidInput)
 		return false
 	}
