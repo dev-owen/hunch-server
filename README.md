@@ -59,3 +59,51 @@ make test
 make sqlc
 make migrate-up
 ```
+
+## Account Auth
+
+The account API supports email/password signup, email/password signin, Google signin, Kakao signin, signout, and account deletion.
+
+### Signup
+
+```bash
+curl -i -X POST http://localhost:8080/signup \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"user@example.com","password":"password123","display_name":"User"}'
+```
+
+### Signin With Email
+
+```bash
+curl -i -X POST http://localhost:8080/signin \
+  -H 'Content-Type: application/json' \
+  -d '{"method":"email","email":"user@example.com","password":"password123"}'
+```
+
+### Signin With Google Or Kakao
+
+```bash
+curl -i -X POST http://localhost:8080/signin \
+  -H 'Content-Type: application/json' \
+  -d '{"method":"google","access_token":"provider-access-token"}'
+```
+
+```bash
+curl -i -X POST http://localhost:8080/signin \
+  -H 'Content-Type: application/json' \
+  -d '{"method":"kakao","access_token":"provider-access-token"}'
+```
+
+### Signout
+
+```bash
+curl -i -X POST http://localhost:8080/signout \
+  -b 'hunch_session=session-token'
+```
+
+### Delete Account
+
+```bash
+curl -i -X DELETE http://localhost:8080/delete \
+  -b 'hunch_session=session-token'
+```
