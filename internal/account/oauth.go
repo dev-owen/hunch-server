@@ -53,7 +53,13 @@ func (v HTTPProviderVerifier) getJSON(ctx context.Context, url string, accessTok
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		return fmt.Errorf("%w: status %d", ErrInvalidCredentials, resp.StatusCode)
+		if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
+			return fmt.Errorf("%w: status %d", ErrInvalidCredentials, resp.StatusCode)
+		}
+		if resp.StatusCode == http.StatusBadRequest {
+			return fmt.Errorf("%w: status %d", ErrInvalidCredentials, resp.StatusCode)
+		}
+		return fmt.Errorf("%w: status %d", ErrProviderUnavailable, resp.StatusCode)
 	}
 	if err := json.NewDecoder(resp.Body).Decode(target); err != nil {
 		return fmt.Errorf("%w: decode profile", ErrProviderUnavailable)

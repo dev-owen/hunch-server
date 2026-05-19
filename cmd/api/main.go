@@ -76,7 +76,7 @@ func run() error {
 
 	accountRepository := account.NewPostgresRepository(pool)
 	accountVerifier := account.HTTPProviderVerifier{
-		Client:            http.DefaultClient,
+		Client:            &http.Client{Timeout: 5 * time.Second},
 		GoogleUserInfoURL: cfg.GoogleUserInfoURL,
 		KakaoUserInfoURL:  cfg.KakaoUserInfoURL,
 	}

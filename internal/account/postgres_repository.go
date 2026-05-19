@@ -13,6 +13,11 @@ import (
 	"github.com/wonjong/hunch-server/internal/db/dbgen"
 )
 
+const (
+	accountIdentityProviderSubjectConstraint = "account_identities_provider_subject_idx"
+	accountIdentityEmailConstraint           = "account_identities_email_idx"
+)
+
 type PostgresRepository struct {
 	pool    *pgxpool.Pool
 	queries *dbgen.Queries
@@ -172,11 +177,14 @@ func createIdentity(ctx context.Context, queries *dbgen.Queries, params CreateId
 		EmailVerified:   params.EmailVerified,
 		PasswordHash:    textParam(params.PasswordHash),
 	})
+	if isIdentityProviderSubjectConflict(err) {
+		return Identity{}, ErrIdentityAlreadyExists
+	}
+	if isIdentityEmailConflict(err) {
+		return Identity{}, ErrEmailAlreadyExists
+	}
 	if isUniqueViolation(err) {
-		if params.Provider == ProviderEmail {
-			return Identity{}, ErrEmailAlreadyExists
-		}
-		return Identity{}, ErrInvalidCredentials
+		return Identity{}, err
 	}
 	if err != nil {
 		return Identity{}, err
@@ -336,4 +344,18 @@ func timeFromTimestamptz(value pgtype.Timestamptz) time.Time {
 func isUniqueViolation(err error) bool {
 	var pgErr *pgconn.PgError
 	return errors.As(err, &pgErr) && pgErr.Code == "23505"
+}
+
+func isIdentityProviderSubjectConflict(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) &&
+		pgErr.Code == "23505" &&
+		pgErr.ConstraintName == accountIdentityProviderSubjectConstraint
+}
+
+func isIdentityEmailConflict(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) &&
+		pgErr.Code == "23505" &&
+		pgErr.ConstraintName == accountIdentityEmailConstraint
 }
