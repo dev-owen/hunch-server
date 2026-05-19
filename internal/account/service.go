@@ -129,8 +129,23 @@ func (s *Service) signinOAuth(ctx context.Context, input SigninInput) (AuthResul
 		return AuthResult{}, fmt.Errorf("%w: provider mismatch", ErrInvalidCredentials)
 	}
 
+	var lastConflict error
+	for attempt := 0; attempt < 2; attempt++ {
+		result, err := s.signinOAuthProfile(ctx, input, profile)
+		if err == nil {
+			return result, nil
+		}
+		if !errors.Is(err, ErrIdentityAlreadyExists) && !errors.Is(err, ErrEmailAlreadyExists) {
+			return AuthResult{}, err
+		}
+		lastConflict = err
+	}
+	return AuthResult{}, lastConflict
+}
+
+func (s *Service) signinOAuthProfile(ctx context.Context, input SigninInput, profile ExternalProfile) (AuthResult, error) {
 	var result AuthResult
-	err = s.repository.WithTx(ctx, func(repo Repository) error {
+	err := s.repository.WithTx(ctx, func(repo Repository) error {
 		identity, err := repo.FindIdentityWithAccount(ctx, profile.Provider, profile.Subject)
 		if err == nil {
 			session, err := s.createSession(ctx, repo, identity.Account.ID, input.UserAgent)
@@ -200,6 +215,10 @@ func verifiedEmail(profile ExternalProfile) string {
 }
 
 func verifiedNormalizedEmail(profile ExternalProfile) string {
+	return normalizedVerifiedEmailForLookup(profile)
+}
+
+func normalizedVerifiedEmailForLookup(profile ExternalProfile) string {
 	if !profile.EmailVerified || profile.Email == "" {
 		return ""
 	}

@@ -64,6 +64,16 @@ make migrate-up
 
 The account API supports email/password signup, email/password signin, Google signin, Kakao signin, signout, and account deletion.
 
+Auth-related environment variables:
+
+- `SESSION_COOKIE_NAME`: session cookie name, default `hunch_session`.
+- `SESSION_TTL_HOURS`: session lifetime in hours, default `720`.
+- `BCRYPT_COST`: password hash cost, default `12`.
+- `GOOGLE_USERINFO_URL`: Google OpenID Connect userinfo endpoint override.
+- `KAKAO_USERINFO_URL`: Kakao user information endpoint override.
+
+Session cookies are `HttpOnly`, `SameSite=Lax`, and `Secure` outside `APP_ENV=local`.
+
 ### Signup
 
 ```bash

@@ -2,6 +2,7 @@ package account
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -92,5 +93,23 @@ func TestHTTPProviderVerifierRejectsProviderError(t *testing.T) {
 	_, err := verifier.Verify(context.Background(), ProviderGoogle, "bad-token")
 	if err == nil {
 		t.Fatal("Verify() error = nil, want provider error")
+	}
+}
+
+func TestHTTPProviderVerifierTreatsServerErrorAsUnavailable(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "try later", http.StatusServiceUnavailable)
+	}))
+	defer server.Close()
+
+	verifier := HTTPProviderVerifier{
+		Client:            server.Client(),
+		GoogleUserInfoURL: server.URL,
+		KakaoUserInfoURL:  server.URL,
+	}
+
+	_, err := verifier.Verify(context.Background(), ProviderGoogle, "provider-token")
+	if !errors.Is(err, ErrProviderUnavailable) {
+		t.Fatalf("Verify() error = %v, want ErrProviderUnavailable", err)
 	}
 }

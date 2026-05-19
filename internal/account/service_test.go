@@ -137,6 +137,77 @@ func TestServiceSigninOAuthRejectsProviderMismatch(t *testing.T) {
 	}
 }
 
+func TestServiceSigninOAuthRetriesIdentityConflict(t *testing.T) {
+	repo := newFakeRepository()
+	account, err := repo.CreateAccount(context.Background(), CreateAccountParams{
+		Email: "google@example.com", NormalizedEmail: "google@example.com",
+	})
+	if err != nil {
+		t.Fatalf("CreateAccount() error = %v", err)
+	}
+	_, err = repo.CreateIdentity(context.Background(), CreateIdentityParams{
+		AccountID:       account.ID,
+		Provider:        ProviderGoogle,
+		ProviderSubject: "google-sub",
+		Email:           "google@example.com",
+		NormalizedEmail: "google@example.com",
+		EmailVerified:   true,
+	})
+	if err != nil {
+		t.Fatalf("CreateIdentity() error = %v", err)
+	}
+	repo.identityLookupMisses = 1
+	service := NewService(Config{
+		Repository: repo,
+		Verifier: fakeVerifier{profile: ExternalProfile{
+			Provider: ProviderGoogle, Subject: "google-sub", Email: "google@example.com", EmailVerified: true,
+		}},
+		BcryptCost: 4,
+		SessionTTL: time.Hour,
+		Now:        func() time.Time { return time.Unix(1000, 0).UTC() },
+	})
+
+	result, err := service.Signin(context.Background(), SigninInput{
+		Method: ProviderGoogle, AccessToken: "provider-token",
+	})
+	if err != nil {
+		t.Fatalf("Signin() error = %v", err)
+	}
+	if result.Account.Email != "google@example.com" {
+		t.Fatalf("Email = %q", result.Account.Email)
+	}
+}
+
+func TestServiceSigninOAuthRetriesAccountEmailConflict(t *testing.T) {
+	repo := newFakeRepository()
+	_, err := repo.CreateAccount(context.Background(), CreateAccountParams{
+		Email: "google@example.com", NormalizedEmail: "google@example.com",
+	})
+	if err != nil {
+		t.Fatalf("CreateAccount() error = %v", err)
+	}
+	repo.accountLookupMisses = 1
+	service := NewService(Config{
+		Repository: repo,
+		Verifier: fakeVerifier{profile: ExternalProfile{
+			Provider: ProviderGoogle, Subject: "google-sub", Email: "google@example.com", EmailVerified: true,
+		}},
+		BcryptCost: 4,
+		SessionTTL: time.Hour,
+		Now:        func() time.Time { return time.Unix(1000, 0).UTC() },
+	})
+
+	result, err := service.Signin(context.Background(), SigninInput{
+		Method: ProviderGoogle, AccessToken: "provider-token",
+	})
+	if err != nil {
+		t.Fatalf("Signin() error = %v", err)
+	}
+	if result.Account.Email != "google@example.com" {
+		t.Fatalf("Email = %q", result.Account.Email)
+	}
+}
+
 func TestServiceAuthenticateReturnsAccountForValidSession(t *testing.T) {
 	repo := newFakeRepository()
 	service := NewService(Config{
@@ -231,13 +302,15 @@ func (v fakeVerifier) Verify(context.Context, Provider, string) (ExternalProfile
 }
 
 type fakeRepository struct {
-	nextID          byte
-	accounts        map[string]Account
-	accountsByID    map[string]Account
-	identities      map[string]Identity
-	emailIdentities map[string]Identity
-	sessions        map[string]Account
-	revokedSessions map[string]bool
+	nextID               byte
+	accounts             map[string]Account
+	accountsByID         map[string]Account
+	identities           map[string]Identity
+	emailIdentities      map[string]Identity
+	sessions             map[string]Account
+	revokedSessions      map[string]bool
+	identityLookupMisses int
+	accountLookupMisses  int
 }
 
 func newFakeRepository() *fakeRepository {
@@ -283,6 +356,10 @@ func (r *fakeRepository) CreateAccount(_ context.Context, params CreateAccountPa
 }
 
 func (r *fakeRepository) FindActiveAccountByNormalizedEmail(_ context.Context, normalizedEmail string) (Account, error) {
+	if r.accountLookupMisses > 0 {
+		r.accountLookupMisses--
+		return Account{}, ErrInvalidCredentials
+	}
 	account, ok := r.accounts[normalizedEmail]
 	if !ok {
 		return Account{}, ErrInvalidCredentials
@@ -325,7 +402,7 @@ func (r *fakeRepository) CreateIdentity(_ context.Context, params CreateIdentity
 	}
 	key := identityKey(params.Provider, params.ProviderSubject)
 	if _, ok := r.identities[key]; ok {
-		return Identity{}, ErrInvalidCredentials
+		return Identity{}, ErrIdentityAlreadyExists
 	}
 	account := r.accountsByID[uuidKey(params.AccountID)]
 	identity := Identity{
@@ -347,6 +424,10 @@ func (r *fakeRepository) CreateIdentity(_ context.Context, params CreateIdentity
 }
 
 func (r *fakeRepository) FindIdentityWithAccount(_ context.Context, provider Provider, subject string) (Identity, error) {
+	if r.identityLookupMisses > 0 {
+		r.identityLookupMisses--
+		return Identity{}, ErrInvalidCredentials
+	}
 	identity, ok := r.identities[identityKey(provider, subject)]
 	if !ok {
 		return Identity{}, ErrInvalidCredentials
