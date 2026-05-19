@@ -183,6 +183,9 @@ func createIdentity(ctx context.Context, queries *dbgen.Queries, params CreateId
 	if isIdentityEmailConflict(err) {
 		return Identity{}, ErrEmailAlreadyExists
 	}
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Identity{}, ErrInvalidCredentials
+	}
 	if isUniqueViolation(err) {
 		return Identity{}, err
 	}
@@ -224,6 +227,9 @@ func createSession(ctx context.Context, queries *dbgen.Queries, params CreateSes
 		UserAgent: params.UserAgent,
 		ExpiresAt: timestamptzParam(params.ExpiresAt),
 	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Session{}, ErrInvalidCredentials
+	}
 	if err != nil {
 		return Session{}, err
 	}

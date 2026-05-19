@@ -26,7 +26,15 @@ WHERE account_id = $1
   AND deleted_at IS NULL;
 
 -- name: CreateAccountIdentity :one
-INSERT INTO account_identities (
+WITH locked_account AS (
+    SELECT accounts.id
+    FROM accounts
+    WHERE accounts.id = sqlc.arg(account_id)
+      AND accounts.deleted_at IS NULL
+      AND accounts.status = 'active'
+    FOR UPDATE
+)
+INSERT INTO account_identities AS ai (
     account_id,
     provider,
     provider_subject,
@@ -35,8 +43,16 @@ INSERT INTO account_identities (
     email_verified,
     password_hash
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7)
-RETURNING id, account_id, provider, provider_subject, email, normalized_email, email_verified, password_hash, created_at, updated_at, deleted_at;
+SELECT
+    locked_account.id,
+    sqlc.arg(provider),
+    sqlc.arg(provider_subject),
+    sqlc.arg(email),
+    sqlc.arg(normalized_email),
+    sqlc.arg(email_verified),
+    sqlc.arg(password_hash)
+FROM locked_account
+RETURNING ai.id, ai.account_id, ai.provider, ai.provider_subject, ai.email, ai.normalized_email, ai.email_verified, ai.password_hash, ai.created_at, ai.updated_at, ai.deleted_at;
 
 -- name: FindIdentityWithAccount :one
 SELECT
@@ -97,9 +113,22 @@ WHERE ai.provider = 'email'
   AND a.status = 'active';
 
 -- name: CreateAccountSession :one
-INSERT INTO account_sessions (account_id, token_hash, user_agent, expires_at)
-VALUES ($1, $2, $3, $4)
-RETURNING id, account_id, token_hash, user_agent, expires_at, revoked_at, created_at;
+WITH locked_account AS (
+    SELECT accounts.id
+    FROM accounts
+    WHERE accounts.id = sqlc.arg(account_id)
+      AND accounts.deleted_at IS NULL
+      AND accounts.status = 'active'
+    FOR UPDATE
+)
+INSERT INTO account_sessions AS s (account_id, token_hash, user_agent, expires_at)
+SELECT
+    locked_account.id,
+    sqlc.arg(token_hash),
+    sqlc.arg(user_agent),
+    sqlc.arg(expires_at)
+FROM locked_account
+RETURNING s.id, s.account_id, s.token_hash, s.user_agent, s.expires_at, s.revoked_at, s.created_at;
 
 -- name: FindAccountBySessionTokenHash :one
 SELECT
