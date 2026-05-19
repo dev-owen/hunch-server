@@ -47,7 +47,15 @@ func (q *Queries) CreateAccount(ctx context.Context, arg CreateAccountParams) (A
 }
 
 const createAccountIdentity = `-- name: CreateAccountIdentity :one
-INSERT INTO account_identities (
+WITH locked_account AS (
+    SELECT accounts.id
+    FROM accounts
+    WHERE accounts.id = $7
+      AND accounts.deleted_at IS NULL
+      AND accounts.status = 'active'
+    FOR UPDATE
+)
+INSERT INTO account_identities AS ai (
     account_id,
     provider,
     provider_subject,
@@ -56,29 +64,37 @@ INSERT INTO account_identities (
     email_verified,
     password_hash
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7)
-RETURNING id, account_id, provider, provider_subject, email, normalized_email, email_verified, password_hash, created_at, updated_at, deleted_at
+SELECT
+    locked_account.id,
+    $1,
+    $2,
+    $3,
+    $4,
+    $5,
+    $6
+FROM locked_account
+RETURNING ai.id, ai.account_id, ai.provider, ai.provider_subject, ai.email, ai.normalized_email, ai.email_verified, ai.password_hash, ai.created_at, ai.updated_at, ai.deleted_at
 `
 
 type CreateAccountIdentityParams struct {
-	AccountID       pgtype.UUID `json:"account_id"`
 	Provider        string      `json:"provider"`
 	ProviderSubject string      `json:"provider_subject"`
 	Email           pgtype.Text `json:"email"`
 	NormalizedEmail pgtype.Text `json:"normalized_email"`
 	EmailVerified   bool        `json:"email_verified"`
 	PasswordHash    pgtype.Text `json:"password_hash"`
+	AccountID       pgtype.UUID `json:"account_id"`
 }
 
 func (q *Queries) CreateAccountIdentity(ctx context.Context, arg CreateAccountIdentityParams) (AccountIdentity, error) {
 	row := q.db.QueryRow(ctx, createAccountIdentity,
-		arg.AccountID,
 		arg.Provider,
 		arg.ProviderSubject,
 		arg.Email,
 		arg.NormalizedEmail,
 		arg.EmailVerified,
 		arg.PasswordHash,
+		arg.AccountID,
 	)
 	var i AccountIdentity
 	err := row.Scan(
@@ -98,24 +114,37 @@ func (q *Queries) CreateAccountIdentity(ctx context.Context, arg CreateAccountId
 }
 
 const createAccountSession = `-- name: CreateAccountSession :one
-INSERT INTO account_sessions (account_id, token_hash, user_agent, expires_at)
-VALUES ($1, $2, $3, $4)
-RETURNING id, account_id, token_hash, user_agent, expires_at, revoked_at, created_at
+WITH locked_account AS (
+    SELECT accounts.id
+    FROM accounts
+    WHERE accounts.id = $4
+      AND accounts.deleted_at IS NULL
+      AND accounts.status = 'active'
+    FOR UPDATE
+)
+INSERT INTO account_sessions AS s (account_id, token_hash, user_agent, expires_at)
+SELECT
+    locked_account.id,
+    $1,
+    $2,
+    $3
+FROM locked_account
+RETURNING s.id, s.account_id, s.token_hash, s.user_agent, s.expires_at, s.revoked_at, s.created_at
 `
 
 type CreateAccountSessionParams struct {
-	AccountID pgtype.UUID        `json:"account_id"`
 	TokenHash string             `json:"token_hash"`
 	UserAgent string             `json:"user_agent"`
 	ExpiresAt pgtype.Timestamptz `json:"expires_at"`
+	AccountID pgtype.UUID        `json:"account_id"`
 }
 
 func (q *Queries) CreateAccountSession(ctx context.Context, arg CreateAccountSessionParams) (AccountSession, error) {
 	row := q.db.QueryRow(ctx, createAccountSession,
-		arg.AccountID,
 		arg.TokenHash,
 		arg.UserAgent,
 		arg.ExpiresAt,
+		arg.AccountID,
 	)
 	var i AccountSession
 	err := row.Scan(
