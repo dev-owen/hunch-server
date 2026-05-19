@@ -1,5 +1,7 @@
 # Hunch Server
 
+[![CI](https://github.com/dev-owen/hunch-server/actions/workflows/ci.yml/badge.svg)](https://github.com/dev-owen/hunch-server/actions/workflows/ci.yml)
+
 Go server foundation for Hunch.
 
 ## Stack
@@ -55,7 +57,13 @@ Prometheus is available at `http://localhost:9090` and scrapes the API metrics e
 
 ```bash
 make fmt
+make build
 make test
+make test-ci
 make sqlc
 make migrate-up
 ```
+
+## CI
+
+GitHub Actions runs `make build` and `make test-ci` for pull requests targeting `main`, pushes to `main`, and manual workflow dispatches. The CI test target sets `RUN_INTEGRATION_TESTS=1`, so Docker must be available for the testcontainers migration test.
