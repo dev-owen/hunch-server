@@ -137,6 +137,84 @@ func TestServiceSigninOAuthRejectsProviderMismatch(t *testing.T) {
 	}
 }
 
+func TestServiceAuthenticateReturnsAccountForValidSession(t *testing.T) {
+	repo := newFakeRepository()
+	service := NewService(Config{
+		Repository: repo,
+		Verifier:   fakeVerifier{},
+		BcryptCost: 4,
+		SessionTTL: time.Hour,
+		Now:        func() time.Time { return time.Unix(1000, 0).UTC() },
+	})
+	result, err := service.SignupEmail(context.Background(), SignupEmailInput{
+		Email: "user@example.com", Password: "password123",
+	})
+	if err != nil {
+		t.Fatalf("SignupEmail() error = %v", err)
+	}
+
+	account, err := service.Authenticate(context.Background(), result.Session.RawToken)
+	if err != nil {
+		t.Fatalf("Authenticate() error = %v", err)
+	}
+	if account.Email != "user@example.com" {
+		t.Fatalf("Email = %q", account.Email)
+	}
+}
+
+func TestServiceSignoutRevokesSession(t *testing.T) {
+	repo := newFakeRepository()
+	service := NewService(Config{
+		Repository: repo,
+		Verifier:   fakeVerifier{},
+		BcryptCost: 4,
+		SessionTTL: time.Hour,
+		Now:        func() time.Time { return time.Unix(1000, 0).UTC() },
+	})
+	result, err := service.SignupEmail(context.Background(), SignupEmailInput{
+		Email: "user@example.com", Password: "password123",
+	})
+	if err != nil {
+		t.Fatalf("SignupEmail() error = %v", err)
+	}
+
+	if err := service.Signout(context.Background(), result.Session.RawToken); err != nil {
+		t.Fatalf("Signout() error = %v", err)
+	}
+	_, err = service.Authenticate(context.Background(), result.Session.RawToken)
+	if !errors.Is(err, ErrUnauthenticated) {
+		t.Fatalf("Authenticate() error = %v, want ErrUnauthenticated", err)
+	}
+}
+
+func TestServiceDeleteAccountSoftDeletesAndRevokesSessions(t *testing.T) {
+	repo := newFakeRepository()
+	service := NewService(Config{
+		Repository: repo,
+		Verifier:   fakeVerifier{},
+		BcryptCost: 4,
+		SessionTTL: time.Hour,
+		Now:        func() time.Time { return time.Unix(1000, 0).UTC() },
+	})
+	result, err := service.SignupEmail(context.Background(), SignupEmailInput{
+		Email: "user@example.com", Password: "password123",
+	})
+	if err != nil {
+		t.Fatalf("SignupEmail() error = %v", err)
+	}
+
+	if err := service.DeleteAccount(context.Background(), result.Account.ID); err != nil {
+		t.Fatalf("DeleteAccount() error = %v", err)
+	}
+	_, err = service.Authenticate(context.Background(), result.Session.RawToken)
+	if !errors.Is(err, ErrUnauthenticated) {
+		t.Fatalf("Authenticate() error = %v, want ErrUnauthenticated", err)
+	}
+	if len(repo.emailIdentities) != 0 {
+		t.Fatalf("email identity count = %d, want 0", len(repo.emailIdentities))
+	}
+}
+
 type fakeVerifier struct {
 	profile ExternalProfile
 	err     error
