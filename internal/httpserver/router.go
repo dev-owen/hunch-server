@@ -14,7 +14,8 @@ var errNotReady = errors.New("not ready")
 type ReadinessCheck func(*http.Request) error
 
 type Dependencies struct {
-	ReadinessCheck ReadinessCheck
+	ReadinessCheck    ReadinessCheck
+	SessionCookieName string
 
 	AccountSignup  http.Handler
 	AccountSignin  http.Handler
@@ -61,6 +62,8 @@ func NewRouter(deps Dependencies) http.Handler {
 	}
 
 	router.Handle("/metrics", promhttp.Handler())
+
+	newHunchAPI(deps).Mount(router)
 
 	return router
 }
