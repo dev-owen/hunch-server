@@ -31,11 +31,6 @@ type Config struct {
 }
 
 func Load() (Config, error) {
-	usePathStyle, err := envBool("S3_USE_PATH_STYLE", true)
-	if err != nil {
-		return Config{}, err
-	}
-
 	sessionTTLHours, err := envInt("SESSION_TTL_HOURS", 24*30)
 	if err != nil {
 		return Config{}, err
@@ -50,6 +45,11 @@ func Load() (Config, error) {
 	}
 	if bcryptCost < 4 || bcryptCost > 31 {
 		return Config{}, fmt.Errorf("BCRYPT_COST must be between 4 and 31")
+	}
+
+	usePathStyle, err := envBool("S3_USE_PATH_STYLE", true)
+	if err != nil {
+		return Config{}, err
 	}
 
 	return Config{
@@ -85,19 +85,6 @@ func envString(key, fallback string) string {
 	return value
 }
 
-func envBool(key string, fallback bool) (bool, error) {
-	value := os.Getenv(key)
-	if value == "" {
-		return fallback, nil
-	}
-
-	parsed, err := strconv.ParseBool(value)
-	if err != nil {
-		return false, fmt.Errorf("parse %s: %w", key, err)
-	}
-	return parsed, nil
-}
-
 func envInt(key string, fallback int) (int, error) {
 	value := os.Getenv(key)
 	if value == "" {
@@ -107,6 +94,19 @@ func envInt(key string, fallback int) (int, error) {
 	parsed, err := strconv.Atoi(value)
 	if err != nil {
 		return 0, fmt.Errorf("parse %s: %w", key, err)
+	}
+	return parsed, nil
+}
+
+func envBool(key string, fallback bool) (bool, error) {
+	value := os.Getenv(key)
+	if value == "" {
+		return fallback, nil
+	}
+
+	parsed, err := strconv.ParseBool(value)
+	if err != nil {
+		return false, fmt.Errorf("parse %s: %w", key, err)
 	}
 	return parsed, nil
 }

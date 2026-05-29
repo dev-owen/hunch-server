@@ -93,11 +93,12 @@ func run() error {
 	})
 
 	router := httpserver.NewRouter(httpserver.Dependencies{
-		ReadinessCheck: db.PingCheck(pool),
-		AccountSignup:  http.HandlerFunc(accountHandlers.Signup),
-		AccountSignin:  http.HandlerFunc(accountHandlers.Signin),
-		AccountSignout: http.HandlerFunc(accountHandlers.Signout),
-		AccountDelete:  http.HandlerFunc(accountHandlers.Delete),
+		ReadinessCheck:    db.PingCheck(pool),
+		SessionCookieName: cfg.SessionCookieName,
+		AccountSignup:     http.HandlerFunc(accountHandlers.Signup),
+		AccountSignin:     http.HandlerFunc(accountHandlers.Signin),
+		AccountSignout:    http.HandlerFunc(accountHandlers.Signout),
+		AccountDelete:     http.HandlerFunc(accountHandlers.Delete),
 	})
 
 	server := &http.Server{
